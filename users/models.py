@@ -1,8 +1,9 @@
 from django.db import models
 
 from products.models import Product
+from core.models     import TimeStampModel
 
-class User(models.Model): 
+class User(TimeStampModel): 
     kakao_id                = models.CharField(max_length=50)
     name                    = models.CharField(max_length=50)
     email                   = models.EmailField(unique=True)
@@ -10,9 +11,7 @@ class User(models.Model):
     phone_number            = models.CharField(max_length=30, unique=True, null=True)
     personal_clearance_code = models.CharField(max_length=13, unique=True, null=True)
     address                 = models.CharField(max_length=200)
-    created_at              = models.DateTimeField(auto_now_add=True)
-    updated_at              = models.DateTimeField(auto_now=True)
-
+  
     class Meta: 
         db_table = 'users'
 

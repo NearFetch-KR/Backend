@@ -1,15 +1,14 @@
 from django.db       import models
 
+from core.models     import TimeStampModel
 from users.models    import User
 from products.models import Product
 
 
-class Order(models.Model):
+class Order(TimeStampModel):
     user         = models.ForeignKey(User, on_delete=models.CASCADE)
     order_status = models.ForeignKey('OrderStatus', on_delete=models.CASCADE)
     order_number = models.CharField(max_length=150)
-    created_at   = models.DateTimeField(auto_now_add=True)
-    updated_at   = models.DateTimeField(auto_now=True)
     
     class Meta:
         db_table = 'orders'
