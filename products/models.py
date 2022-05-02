@@ -1,7 +1,14 @@
 from django.db import models
 
+class Largecategory(models.Model):
+    name = models.CharField(max_length=50)
+
+    class Meta:
+        db_table = "large_categories"
+
 
 class Mediumcategory(models.Model):
+    large_category = models.ForeignKey("Largecategory", on_delete=models.SET_NULL, null=True)
     name = models.CharField(max_length=50)
 
     class Meta:
@@ -9,7 +16,7 @@ class Mediumcategory(models.Model):
 
 
 class Smallcategory(models.Model):
-    medium_category = models.ForeignKey("Mediumcategory", on_delete=models.CASCADE)
+    medium_category = models.ForeignKey("Mediumcategory", on_delete=models.SET_NULL, null=True)
     name = models.CharField(max_length=50)
 
     class Meta:
@@ -17,11 +24,11 @@ class Smallcategory(models.Model):
 
 
 class Product(models.Model):
-    small_category = models.ForeignKey("Smallcategory", on_delete=models.CASCADE)
+    small_category = models.ForeignKey("Smallcategory", on_delete=models.SET_NULL, null=True)
     brand    = models.CharField(max_length=50)
     name     = models.CharField(max_length=300)
-    price    = models.DecimalField(max_digits=10, decimal_places=2)
-    sale_price = models.DecimalField(max_digits=10, decimal_places=2)
+    price    = models.IntegerField()
+    sale_price = models.IntegerField(null=True)
     sku_number = models.CharField(max_length=50)
 
     def __str__(self):
@@ -40,18 +47,11 @@ class Image(models.Model):
 
 
 class Material(models.Model):
-    name = models.CharField(max_length=50)
+    name     = models.CharField(max_length=300)
+    product  = models.ForeignKey('Product', on_delete=models.SET_NULL, null=True)
 
     class Meta:
         db_table = "materials"
-
-
-class MaterialProduct(models.Model):
-    material = models.ForeignKey('Material', on_delete=models.CASCADE)
-    product  = models.ForeignKey('Product', on_delete=models.CASCADE)
-   
-    class Meta:
-        db_table = 'material_products'
 
 
 class Option(models.Model):
