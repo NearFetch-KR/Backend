@@ -4,6 +4,8 @@ from core.models     import TimeStampModel
 from users.models    import User
 from products.models import Product
 
+from core.utils      import signin_decorator
+
 
 class Order(TimeStampModel):
     user         = models.ForeignKey(User, on_delete=models.CASCADE)

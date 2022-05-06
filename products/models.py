@@ -30,6 +30,7 @@ class Product(models.Model):
     price    = models.IntegerField()
     sale_price = models.IntegerField(null=True)
     sku_number = models.CharField(max_length=50)
+    hits = models.PositiveIntegerField(default = 0, verbose_name='조회수')
 
     def __str__(self):
         return self.name
@@ -62,3 +63,10 @@ class Option(models.Model):
         db_table = 'options'
 
 
+class ProductHits(models.Model):
+    product = models.ForeignKey(Product, on_delete=models.SET_NULL, null=True)
+    client_ip = models.GenericIPAddressField(protocol='both', unpack_ipv4=False, null=True, verbose_name='사용자 IP주소')
+    date = models.DateField(auto_now_add=True, verbose_name='조회날짜', null=True)
+    
+    class Meta:
+        db_table = 'product_hits'
