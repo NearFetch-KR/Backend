@@ -182,7 +182,7 @@ class CartView(View):
             "image"      : cart.product.image_set.all()[0].url,
             "brand"      : cart.product.brand,
             "name"       : cart.product.name,
-            "option"     : cart.product.option_set.all()[0].size,
+            "option"     : [option.size for option in cart.product.option_set.all()],
             "quantity"   : cart.quantity,
             "price"      : cart.product.price,
             "sale_price" : cart.product.sale_price,
