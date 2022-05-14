@@ -1,14 +1,110 @@
-from datetime import date, datetime, timedelta
 import random
-from unicodedata import category
+from string import ascii_uppercase
 from django.db.models import Q
 from difflib import SequenceMatcher
 
 from django.views           import View
 
-from products.models        import Product, ProductHits
+from products.models        import Largecategory, Mediumcategory, Product, ProductHits, Smallcategory
 from users.models           import Like
 from django.http            import JsonResponse
+
+class MakeBrandListView(View):
+    def get(self, request):
+        alpha_list = list(ascii_uppercase)
+
+        result = {}
+        for alpha in alpha_list:
+            result[alpha] = [product['brand'] for product in Product.objects.filter(brand__startswith=alpha).values('brand').distinct()]
+      
+        delete_by_keys = [k for k, v in result.items() if v == []]
+
+        for delete_by_key in delete_by_keys:
+            del result[delete_by_key]
+        return JsonResponse({'message': 'SUCCESS', 'result': result}, status=200)
+
+class MakeFilterView(View):
+    def get(self, request):
+        large_categories = [large_category.name for large_category in Largecategory.objects.all()]
+        brands = [product['brand'] for product in Product.objects.values('brand').distinct()]
+        small_categories = [small_category['name'] for small_category in Smallcategory.objects.values('name').distinct()]
+
+     
+        result = {
+            'gender' : large_categories,
+            'brand' : brands,
+            'categorySmall' : small_categories
+        }
+        return JsonResponse({'message': 'SUCCESS', 'result': result}, status=200)
+
+class MakeCategoryView(View):
+    def get(self, request):
+        medium_categories = Mediumcategory.objects.values('name').distinct()
+        medium_category_dict = [medium_category['name'] for medium_category in medium_categories]
+        men = {}
+        women = {}
+        for medium_category in medium_category_dict:
+            men[medium_category] = [
+                small_category.name for small_category in Smallcategory.objects.filter(
+                    medium_category__name=medium_category,
+                    medium_category__large_category__name="MEN"
+                )
+            ]
+
+            women[medium_category] = [
+                small_category.name for small_category in Smallcategory.objects.filter(
+                    medium_category__name=medium_category,
+                    medium_category__large_category__name="WOMEN"
+                )
+            ]
+        
+        return JsonResponse({'message': 'SUCCESS', 'men': men, 'women': women}, status=200)
+
+class MainHotItemView(View):
+    def get(self, request):
+        products = Product.objects.order_by('-hits')[:4]
+
+        result = [{
+            "itemImg"        : [image.url for image in product.image_set.all()],
+            "itemBrand"      : product.brand,
+            "itemName"       : product.name,
+            "price"          : product.price,
+            "sale_price"     : product.sale_price,
+            "skuNum"         : product.sku_number,
+            "product_id"     : product.id,
+            "categorySmall"  : product.small_category.name,
+            "categoryMedium" : product.small_category.medium_category.name,
+            "gender"         : product.small_category.medium_category.large_category.name,
+            "itemOption"     : [option.size for option in product.option_set.all()],
+            "materials"      : [material.name for material in product.material_set.all()],
+            'hits'           : product.hits
+        } for product in products]
+
+        return JsonResponse({'message': 'SUCCESS', 'result': result}, status=200)
+
+class MainRecommendView(View):
+    def get(self, request):
+        products = Product.objects.filter(small_category__medium_category__name='bags', small_category__medium_category__large_category__name="WOMEN")
+
+        products = random.sample(list(products), 40)
+
+        result = [{
+            "itemImg"        : [image.url for image in product.image_set.all()],
+            "itemBrand"      : product.brand,
+            "itemName"       : product.name,
+            "price"          : product.price,
+            "sale_price"     : product.sale_price,
+            "skuNum"         : product.sku_number,
+            "product_id"     : product.id,
+            "categorySmall"  : product.small_category.name,
+            "categoryMedium" : product.small_category.medium_category.name,
+            "gender"         : product.small_category.medium_category.large_category.name,
+            "itemOption"     : [option.size for option in product.option_set.all()],
+            "materials"      : [material.name for material in product.material_set.all()],
+            'hits'           : product.hits
+        } for product in products]
+
+        return JsonResponse({'message': 'SUCCESS', 'result': result}, status=200)
 
 class ProductListView(View):
     def get(self, request):
@@ -19,23 +115,34 @@ class ProductListView(View):
         large_category  = request.GET.get('large_category', None)
         medium_category = request.GET.get('medium_category', None)
         small_category  = request.GET.get('small_category', None)
+        sale  = request.GET.get('sale', None)
+
+        if large_category == "null":
+            large_category = None
 
         if medium_category == "null":
             medium_category = None
 
         if small_category == "null":
-            small_category = None        
+            small_category = None
+
+        if sale == "null":
+            sale = None      
+
+           
         
         # 정렬 부분
         order_condition = request.GET.get('order', None)
-
+        print(order_condition)
         # 필터 부분
         brand = request.GET.getlist('brand', None)
         min_price = request.GET.get('min_price', 0)
-        max_price = request.GET.get('max_price', 5000000)
+        max_price = request.GET.get('max_price', 10000000)
         gender_filter = request.GET.getlist('gender', None)
         small_category_filter = request.GET.getlist('categorySmall', None)
-        print(gender_filter)
+
+        if brand == ['null']:
+            brand = None   
 
         products = Product.objects.select_related(
             'small_category', 'small_category__medium_category', 'small_category__medium_category__large_category'
@@ -50,6 +157,9 @@ class ProductListView(View):
         if small_category:
             products = products.filter(small_category__name__iexact=small_category)
 
+        if sale:
+            products = products.exclude(sale_price=None)
+
         if brand:
             products = products.filter(brand__in=brand)
 
@@ -59,8 +169,8 @@ class ProductListView(View):
         if small_category_filter:
             products = products.filter(small_category__name__in=small_category_filter)
 
-        # if min_price or max_price:
-        #     products = products.filter(price__range=(min_price, max_price))
+        if min_price or max_price:
+            products = products.filter(price__range=(min_price, max_price))
 
         if order_condition == '높은 가격순':
             products = products.order_by('-price')
@@ -70,7 +180,7 @@ class ProductListView(View):
 
         if order_condition == '추천 상품':
             products = products.order_by('-hits') 
-
+            
         result = [{
             "itemImg"        : [image.url for image in product.image_set.all()],
             "itemBrand"      : product.brand,
@@ -90,39 +200,7 @@ class ProductListView(View):
         return JsonResponse({'message': 'SUCCESS', 'result': result}, status=200)
 
 
-class ProductRecommendView(View):
-    def get(self, request):
-        sku_number  = request.GET.get('skuNum', None)
-        print(sku_number)
-        this_product = Product.objects.get(sku_number=sku_number)
-        print(this_product)
-        same_small_category = this_product.small_category.name
-        same_gender = this_product.small_category.medium_category.large_category.name
-        
-        products = Product.objects.filter(
-            small_category__name = same_small_category,
-            small_category__medium_category__large_category__name = same_gender
-        ).exclude(id=this_product.id)
 
-        products = random.sample(list(products), products.count())
-
-        result = [{
-            "itemImg"        : [image.url for image in product.image_set.all()],
-            "itemBrand"      : product.brand,
-            "itemName"       : product.name,
-            "price"          : product.price,
-            "sale_price"     : product.sale_price,
-            "skuNum"         : product.sku_number,
-            "product_id"     : product.id,
-            "categorySmall"  : product.small_category.name,
-            "categoryMedium" : product.small_category.medium_category.name,
-            "gender"         : product.small_category.medium_category.large_category.name,
-            "itemOption"     : [option.size for option in product.option_set.all()],
-            "materials"      : [material.name for material in product.material_set.all()],
-            'hits'           : product.hits
-        } for product in products]
-
-        return JsonResponse({'message': 'SUCCESS', 'result': result}, status=200)
 
 def get_client_ip(request):
     x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
@@ -152,7 +230,7 @@ class ProductDetailView(View): # 상품상세페이지에 필요한 데이터: �
                     product_id = product.id
                 )
 
-            result = {
+            detail = {
                 "itemImg"        : [image.url for image in product.image_set.all()],
                 "itemBrand"      : product.brand,
                 "itemName"       : product.name,
@@ -167,7 +245,38 @@ class ProductDetailView(View): # 상품상세페이지에 필요한 데이터: �
                 "materials"      : [material.name for material in product.material_set.all()],
                 'hits'           : product.hits
             }   
-            return JsonResponse({'result': result}, status=200)
+
+            # 추천 상품(동일 성별이면서 동일 소카테고리인 거)
+            same_small_category = product.small_category.name
+            same_gender = product.small_category.medium_category.large_category.name
+            
+            recommend_products = Product.objects.filter(
+                small_category__name = same_small_category,
+                small_category__medium_category__large_category__name = same_gender
+            ).exclude(id=product.id)
+
+            number_of_samples = 20
+            if len(recommend_products) < number_of_samples:
+                number_of_samples = len(recommend_products)
+            recommend_products = random.sample(list(recommend_products), number_of_samples)
+
+            recommend = [{
+                "itemImg"        : [image.url for image in recommend_product.image_set.all()],
+                "itemBrand"      : recommend_product.brand,
+                "itemName"       : recommend_product.name,
+                "price"          : recommend_product.price,
+                "sale_price"     : recommend_product.sale_price,
+                "skuNum"         : recommend_product.sku_number,
+                "product_id"     : recommend_product.id,
+                "categorySmall"  : recommend_product.small_category.name,
+                "categoryMedium" : recommend_product.small_category.medium_category.name,
+                "gender"         : recommend_product.small_category.medium_category.large_category.name,
+                "itemOption"     : [option.size for option in recommend_product.option_set.all()],
+                "materials"      : [material.name for material in recommend_product.material_set.all()],
+                'hits'           : recommend_product.hits
+            } for recommend_product in recommend_products]
+
+            return JsonResponse({'detail': detail, 'recommend': recommend}, status=200)
 
         except Product.DoesNotExist:
             return JsonResponse({"message": "Product_DoesNotExist"}, status=404)
@@ -686,7 +795,6 @@ class ProductSearchView(View):
 
         else:
             products = products.filter(brand__icontains=word)
-        print(products.count())
 
         result = [{
             "itemImg"        : [image.url for image in product.image_set.all()],
