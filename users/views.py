@@ -27,7 +27,7 @@ class SignUpView(View):
             if email[email.index('@')+1:] not in domain_list:
                 return JsonResponse({'message' : 'INVALID_DOMAIN'}, status = 400)
 
-            regex_email    = '^[a-zA-Z0-9+-_.]+@[a-zA-Z0-9_-]+\.[a-zA-Z0-9-.]+$' # 특수문자 불가, 2~10자리, 영문과 숫자의 조합
+            regex_email    = '^[a-zA-Z0-9+-_.]+@[a-zA-Z0-9_-]+\.[a-zA-Z0-9-.]+$' 
             regex_password = '\S{8,25}'
             if not re.match(regex_email, email):
                 return JsonResponse({'message' : 'INVALID_EMAIL'}, status = 400)
@@ -138,7 +138,7 @@ def kakaologin(request):
 
 class CartView(View):
     # @signin_decorator
-    def post(self, request):  # 
+    def post(self, request):        
         try:
             data = json.loads(request.body)
             if 'itemOption' in data:
@@ -154,7 +154,7 @@ class CartView(View):
             # quantity       = int(data['quantity'])
             
             # if Cart.objects.filter(user=user_id, product=product_id).exists():
-            if Cart.objects.filter(product=product).exists():
+            if Cart.objects.filter(product=product, size=size).exists():
                 return JsonResponse({'MESSAGE' : 'ITEM_ALREADY_EXIST'}, status=400)
                 
             Cart.objects.create(
@@ -179,16 +179,17 @@ class CartView(View):
         
         result=[  # image, brand, item_name, size, quantity, price, sale_price
            {
-            "image"      : cart.product.image_set.all()[0].url,
-            "brand"      : cart.product.brand,
-            "name"       : cart.product.name,
-            "option"     : [option.size for option in cart.product.option_set.all()],
-            "quantity"   : cart.quantity,
-            "price"      : cart.product.price,
-            "sale_price" : cart.product.sale_price,
-            "sku_number" : cart.product.sku_number,
-            "product_id" : cart.product.id,
-            "cart_id"    : cart.id,
+            "image"          : cart.product.image_set.all()[0].url,
+            "brand"          : cart.product.brand,
+            "name"           : cart.product.name,
+            "selectedOption" : cart.size,
+            "option"         : [option.size for option in cart.product.option_set.all()],
+            "quantity"       : cart.quantity,
+            "price"          : cart.product.price,
+            "sale_price"     : cart.product.sale_price,
+            "sku_number"     : cart.product.sku_number,
+            "product_id"     : cart.product.id,
+            "cart_id"        : cart.id,
             }
         for cart in cart_list
         ]
@@ -214,13 +215,17 @@ class CartView(View):
     # @signin_decorator
     def patch(self, request):
         try:
-            data          = json.loads(request.body)
-            quantity      = data['quantity']
-            cart_id       = data['cart_id']
-            cart          = Cart.objects.get(id=cart_id, user_id=request.user)
-            cart.quantity = int(quantity)
+            data      = json.loads(request.body)
+            size_list = data['itemOption']
+            print(size_list)
+            # quantity      = data['quantity']
+            # cart_id       = data['cart_id']
+            # cart          = Cart.objects.get(id=cart_id, user_id=request.user)
+            cart_list = Cart.objects.filter(user_id=None)
 
-            cart.save()
+            for i, cart_item in enumerate(cart_list):
+                cart_item.size = size_list[i]
+                cart_item.save()
             
             return JsonResponse({'MESSAGE':'SUCCESS'}, status=201)
 
@@ -259,17 +264,21 @@ class DeliveryLocationView(View):
             return JsonResponse({'MESSAGE':'KEY_ERROR'}, status=400)
 
         except User.DoesNotExist:
-            return JsonResponse({'MESSAGE':'OBJECT_NOT_EXITST'}, status=400)
+            return JsonResponse({'MESSAGE':'OBJECT_NOT_EXIST'}, status=400)
 
     @signin_decorator
     def get(self, request):
-        user = request.user
-        location = DeliveryLocation.objects.get(user=user)
+        try:
+            user = request.user
+            location = DeliveryLocation.objects.get(user=user)
 
-        result = {
-            "post_number" : location.post_number,
-            "address1"    : location.address1,
-            "address2"    :location.address2,
-        }
+            result = {
+                "post_number" : location.post_number,
+                "address1"    : location.address1,
+                "address2"    : location.address2,
+            }
 
-        return JsonResponse({'result': result}, status=200)
+            return JsonResponse({'result': result}, status=200)
+        
+        except DeliveryLocation.DoesNotExist:
+            return JsonResponse({'MESSAGE':'DELIVERYLOCATION_NOT_EXIST'}, status=400)
