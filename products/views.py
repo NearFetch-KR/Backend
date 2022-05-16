@@ -21,7 +21,7 @@ class MakeBrandListView(View):
 
         for delete_by_key in delete_by_keys:
             del result[delete_by_key]
-        return JsonResponse({'message': 'SUCCESS', 'result': result}, status=200)
+        return JsonResponse({'message': 'success', 'result': result}, status=200)
 
 class MakeFilterView(View):
     def get(self, request):
@@ -35,7 +35,7 @@ class MakeFilterView(View):
             'brand' : brands,
             'categorySmall' : small_categories
         }
-        return JsonResponse({'message': 'SUCCESS', 'result': result}, status=200)
+        return JsonResponse({'message': 'success', 'result': result}, status=200)
 
 class MakeCategoryView(View):
     def get(self, request):
@@ -58,7 +58,7 @@ class MakeCategoryView(View):
                 )
             ]
         
-        return JsonResponse({'message': 'SUCCESS', 'men': men, 'women': women}, status=200)
+        return JsonResponse({'message': 'success', 'men': men, 'women': women}, status=200)
 
 class MainHotItemView(View):
     def get(self, request):
@@ -80,7 +80,7 @@ class MainHotItemView(View):
             'hits'           : product.hits
         } for product in products]
 
-        return JsonResponse({'message': 'SUCCESS', 'result': result}, status=200)
+        return JsonResponse({'message': 'success', 'result': result}, status=200)
 
 class MainRecommendView(View):
     def get(self, request):
@@ -104,70 +104,50 @@ class MainRecommendView(View):
             'hits'           : product.hits
         } for product in products]
 
-        return JsonResponse({'message': 'SUCCESS', 'result': result}, status=200)
+        return JsonResponse({'message': 'success', 'result': result}, status=200)
 
 class ProductListView(View):
     def get(self, request):
         # offset = int(request.GET.get('offset', 0))
         # limit = int(request.GET.get('limit', 5))
 
-        # 카테고리 부분
-        large_category  = request.GET.get('large_category', None)
-        medium_category = request.GET.get('medium_category', None)
-        small_category  = request.GET.get('small_category', None)
+        # 상단 카테고리 및 필터 부분
+        large_category  = request.GET.getlist('gender', None)
+        medium_category = request.GET.get('categoryMedium', None)
+        small_category  = request.GET.getlist('categorySmall', None)
+        print(small_category)
         sale  = request.GET.get('sale', None)
-
-        if large_category == "null":
-            large_category = None
-
-        if medium_category == "null":
-            medium_category = None
-
-        if small_category == "null":
-            small_category = None
-
-        if sale == "null":
-            sale = None      
-
-           
-        
-        # 정렬 부분
-        order_condition = request.GET.get('order', None)
-        print(order_condition)
-        # 필터 부분
         brand = request.GET.getlist('brand', None)
         min_price = request.GET.get('min_price', 0)
         max_price = request.GET.get('max_price', 10000000)
-        gender_filter = request.GET.getlist('gender', None)
-        small_category_filter = request.GET.getlist('categorySmall', None)
 
         if brand == ['null']:
             brand = None   
+     
+        if sale == "null":
+            sale = None      
+
+        # 정렬 부분
+        order_condition = request.GET.get('order', None)
 
         products = Product.objects.select_related(
             'small_category', 'small_category__medium_category', 'small_category__medium_category__large_category'
         ).all()
 
         if large_category:
-            products = products.filter(small_category__medium_category__large_category__name__iexact=large_category)
+            products = products.filter(small_category__medium_category__large_category__name__in=large_category)
 
         if medium_category:
             products = products.filter(small_category__medium_category__name__iexact=medium_category)
 
         if small_category:
-            products = products.filter(small_category__name__iexact=small_category)
+            products = products.filter(small_category__name__in=small_category)
 
         if sale:
             products = products.exclude(sale_price=None)
 
         if brand:
             products = products.filter(brand__in=brand)
-
-        if gender_filter:
-            products = products.filter(small_category__medium_category__large_category__name__in=gender_filter)
-
-        if small_category_filter:
-            products = products.filter(small_category__name__in=small_category_filter)
 
         if min_price or max_price:
             products = products.filter(price__range=(min_price, max_price))
@@ -180,7 +160,14 @@ class ProductListView(View):
 
         if order_condition == '추천 상품':
             products = products.order_by('-hits') 
-            
+        print(len(products))
+
+        # 가격바에 디폴트 값으로 쓰임(화면에 표시되는 상품 중에서의 가장 높은 가격, 가장 낮은 가격)
+        price_bar = {
+            "min" : products.order_by('price')[0].price,
+            "max" : products.order_by('-price')[0].price
+        }
+
         result = [{
             "itemImg"        : [image.url for image in product.image_set.all()],
             "itemBrand"      : product.brand,
@@ -192,12 +179,12 @@ class ProductListView(View):
             "categorySmall"  : product.small_category.name,
             "categoryMedium" : product.small_category.medium_category.name,
             "gender"         : product.small_category.medium_category.large_category.name,
-            "itemOption"     : [option.size for option in product.option_set.all()],
+            "itemOption"     : [option.size for option in product.option_set.all()],    
             "materials"      : [material.name for material in product.material_set.all()],
             'hits'           : product.hits
         } for product in products]
 
-        return JsonResponse({'message': 'SUCCESS', 'result': result}, status=200)
+        return JsonResponse({'message': 'success', 'result': result, 'price_bar': price_bar}, status=200)
 
 
 
@@ -812,4 +799,4 @@ class ProductSearchView(View):
 
         } for product in products]
 
-        return JsonResponse({'message': 'SUCCESS', 'result': result}, status=200)
+        return JsonResponse({'message': 'success', 'result': result}, status=200)
