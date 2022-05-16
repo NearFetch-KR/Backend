@@ -67,6 +67,9 @@ class SignInView(View):
 
             token = jwt.encode({ 'id' : user.id, 'exp':datetime.utcnow() + timedelta(days=1)}, SECRET_KEY, algorithm='HS256')
 
+            if Token.objects.filter(user=user).exists():
+                Token.objects.filter(user=user).delete()
+                
             Token.objects.create(user=user, token=token)
             return JsonResponse({'message' : 'SUCCESS', 'access_token' : token}, status=200)
 
