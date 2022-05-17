@@ -699,7 +699,7 @@ class ProductSearchView(View):
                         convert_word["brand"] = key
                         break
                     else:
-                        if SequenceMatcher(None, key.replace(".","").replace("-","").replace(" ",""), word).ratio() >= 0.7:
+                        if SequenceMatcher(None, key.replace(".","").replace("-","").replace(" ",""), word).ratio() >= 0.6:
                             convert_word["brand"] = key
                             break
 
@@ -708,7 +708,7 @@ class ProductSearchView(View):
                         convert_word["small_category"] = key
                         break
                     else:
-                        if SequenceMatcher(None, key.replace(".","").replace("-","").replace(" ",""), word).ratio() >= 0.7:
+                        if SequenceMatcher(None, key.replace(".","").replace("-","").replace(" ",""), word).ratio() >= 0.6:
                             convert_word["small_category"] = key
                             break
 
@@ -717,7 +717,7 @@ class ProductSearchView(View):
                         convert_word["medium_category"] = key
                         break
                     else:
-                        if SequenceMatcher(None, key.replace(".","").replace("-","").replace(" ",""), word).ratio() >= 0.7:
+                        if SequenceMatcher(None, key.replace(".","").replace("-","").replace(" ",""), word).ratio() >= 0.6:
                             convert_word["medium_category"] = key
                             break
 
@@ -726,7 +726,7 @@ class ProductSearchView(View):
                         convert_word["large_category"] = key
                         break
                     else:
-                        if SequenceMatcher(None, key.replace(".","").replace("-","").replace(" ",""), word).ratio() >= 0.7:
+                        if SequenceMatcher(None, key.replace(".","").replace("-","").replace(" ",""), word).ratio() >= 0.6:
                             convert_word["large_category"] = key
                             break
             else: # 입력이 한글인 경우
@@ -735,7 +735,7 @@ class ProductSearchView(View):
                         convert_word["brand"] = key
                         break
                     else:
-                        if SequenceMatcher(None, brand_dict[key][0].replace(" ",""), word).ratio() >= 0.7:
+                        if SequenceMatcher(None, brand_dict[key][0].replace(" ",""), word).ratio() >= 0.6:
                             convert_word["brand"] = key
                             break
 
@@ -744,7 +744,7 @@ class ProductSearchView(View):
                         convert_word["small_category"] = key
                         break
                     else:
-                        if SequenceMatcher(None, small_category_dict[key][0].replace(" ",""), word).ratio() >= 0.7:
+                        if SequenceMatcher(None, small_category_dict[key][0].replace(" ",""), word).ratio() >= 0.6:
                             convert_word["small_category"] = key
                             break
                 
@@ -753,7 +753,7 @@ class ProductSearchView(View):
                         convert_word["medium_category"] = key
                         break
                     else:
-                        if SequenceMatcher(None, medium_category_dict[key][0].replace(" ",""), word).ratio() >= 0.7:
+                        if SequenceMatcher(None, medium_category_dict[key][0].replace(" ",""), word).ratio() >= 0.6:
                             convert_word["medium_category"] = key
                             break
 
@@ -762,7 +762,7 @@ class ProductSearchView(View):
                         convert_word["large_category"] = key
                         break
                     else:
-                        if SequenceMatcher(None, large_category_dict[key][0].replace(" ",""), word).ratio() >= 0.7:
+                        if SequenceMatcher(None, large_category_dict[key][0].replace(" ",""), word).ratio() >= 0.6:
                             convert_word["large_category"] = key
                             break
         print(convert_word)
@@ -799,4 +799,4 @@ class ProductSearchView(View):
 
         } for product in products]
 
-        return JsonResponse({'message': 'success', 'result': result}, status=200)
+        return JsonResponse({'message': 'success', 'result': result, 'convert_word': convert_word}, status=200)
