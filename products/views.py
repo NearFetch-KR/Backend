@@ -60,6 +60,29 @@ class MakeCategoryView(View):
         
         return JsonResponse({'message': 'success', 'men': men, 'women': women}, status=200)
 
+class MainHotDealView(View):
+    def get(self, request):
+        products = Product.objects.order_by('-discount_rate')[:2]
+
+        result = [{
+            "itemImg"        : [image.url for image in product.image_set.all()],
+            "itemBrand"      : product.brand,
+            "itemName"       : product.name,
+            "price"          : product.price,
+            "sale_price"     : product.sale_price,
+            "skuNum"         : product.sku_number,
+            "product_id"     : product.id,
+            "categorySmall"  : product.small_category.name,
+            "categoryMedium" : product.small_category.medium_category.name,
+            "gender"         : product.small_category.medium_category.large_category.name,
+            "itemOption"     : [option.size for option in product.option_set.all()],
+            "materials"      : [material.name for material in product.material_set.all()],
+            'hits'           : product.hits,
+            "discount_rate"  : product.discount_rate
+        } for product in products]
+
+        return JsonResponse({'message': 'success', 'result': result}, status=200)
+
 class MainHotItemView(View):
     def get(self, request):
         products = Product.objects.order_by('-hits')[:4]
@@ -115,11 +138,10 @@ class ProductListView(View):
         large_category  = request.GET.getlist('gender', None)
         medium_category = request.GET.get('categoryMedium', None)
         small_category  = request.GET.getlist('categorySmall', None)
-        print(small_category)
         sale  = request.GET.get('sale', None)
         brand = request.GET.getlist('brand', None)
         min_price = request.GET.get('min_price', 0)
-        max_price = request.GET.get('max_price', 10000000)
+        max_price = request.GET.get('max_price', 20000000)
 
         if brand == ['null']:
             brand = None   
@@ -133,161 +155,10 @@ class ProductListView(View):
         products = Product.objects.select_related(
             'small_category', 'small_category__medium_category', 'small_category__medium_category__large_category'
         ).all()
-
-        if large_category:
-            products = products.filter(small_category__medium_category__large_category__name__in=large_category)
-
-        if medium_category:
-            products = products.filter(small_category__medium_category__name__iexact=medium_category)
-
-        if small_category:
-            products = products.filter(small_category__name__in=small_category)
-
-        if sale:
-            products = products.exclude(sale_price=None)
-
-        if brand:
-            products = products.filter(brand__in=brand)
-
-        if min_price or max_price:
-            products = products.filter(price__range=(min_price, max_price))
-
-        if order_condition == '높은 가격순':
-            products = products.order_by('-price')
-
-        if order_condition == '낮은 가격순':
-            products = products.order_by('price')   
-
-        if order_condition == '추천 상품':
-            products = products.order_by('-hits') 
-        print(len(products))
-
-        # 가격바에 디폴트 값으로 쓰임(화면에 표시되는 상품 중에서의 가장 높은 가격, 가장 낮은 가격)
-        price_bar = {
-            "min" : products.order_by('price')[0].price,
-            "max" : products.order_by('-price')[0].price
-        }
-
-        result = [{
-            "itemImg"        : [image.url for image in product.image_set.all()],
-            "itemBrand"      : product.brand,
-            "itemName"       : product.name,
-            "price"          : product.price,
-            "sale_price"     : product.sale_price,
-            "skuNum"         : product.sku_number,
-            "product_id"     : product.id,
-            "categorySmall"  : product.small_category.name,
-            "categoryMedium" : product.small_category.medium_category.name,
-            "gender"         : product.small_category.medium_category.large_category.name,
-            "itemOption"     : [option.size for option in product.option_set.all()],    
-            "materials"      : [material.name for material in product.material_set.all()],
-            'hits'           : product.hits
-        } for product in products]
-
-        return JsonResponse({'message': 'success', 'result': result, 'price_bar': price_bar}, status=200)
-
-
-
-
-def get_client_ip(request):
-    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
-    if x_forwarded_for:
-        ip = x_forwarded_for.split(',')[0]
-    else:
-        ip = request.META.get('REMOTE_ADDR')
-    return ip
-
-
-class ProductDetailView(View): # 상품상세페이지에 필요한 데이터: 브랜드이름,상품명,가격,할인가격,스큐넘버,소재,옵션(사이즈),상품사진
-    # def get(self, request, product_id):
-    def get(self, request, sku_number):
-        try:
-            product = Product.objects.get(sku_number=sku_number)
-            # product = Product.objects.get(id=product_id)
-            # images = product.image_set.all()
-
-            ip = get_client_ip(request)
-
-            if not ProductHits.objects.filter(client_ip=ip, product_id=product.id).exists():
-                product.hits += 1 
-                product.save()
-                
-                ProductHits.objects.create(
-                    client_ip = ip,
-                    product_id = product.id
-                )
-
-            detail = {
-                "itemImg"        : [image.url for image in product.image_set.all()],
-                "itemBrand"      : product.brand,
-                "itemName"       : product.name,
-                "price"          : product.price,
-                "sale_price"     : product.sale_price,
-                "skuNum"         : product.sku_number,
-                "product_id"     : product.id,
-                "categorySmall"  : product.small_category.name,
-                "categoryMedium" : product.small_category.medium_category.name,
-                "gender"         : product.small_category.medium_category.large_category.name,
-                "itemOption"     : [option.size for option in product.option_set.all()],
-                "materials"      : [material.name for material in product.material_set.all()],
-                'hits'           : product.hits
-            }   
-
-            # 추천 상품(동일 성별이면서 동일 소카테고리인 거)
-            same_small_category = product.small_category.name
-            same_gender = product.small_category.medium_category.large_category.name
-            
-            recommend_products = Product.objects.filter(
-                small_category__name = same_small_category,
-                small_category__medium_category__large_category__name = same_gender
-            ).exclude(id=product.id)
-
-            number_of_samples = 20
-            if len(recommend_products) < number_of_samples:
-                number_of_samples = len(recommend_products)
-            recommend_products = random.sample(list(recommend_products), number_of_samples)
-
-            recommend = [{
-                "itemImg"        : [image.url for image in recommend_product.image_set.all()],
-                "itemBrand"      : recommend_product.brand,
-                "itemName"       : recommend_product.name,
-                "price"          : recommend_product.price,
-                "sale_price"     : recommend_product.sale_price,
-                "skuNum"         : recommend_product.sku_number,
-                "product_id"     : recommend_product.id,
-                "categorySmall"  : recommend_product.small_category.name,
-                "categoryMedium" : recommend_product.small_category.medium_category.name,
-                "gender"         : recommend_product.small_category.medium_category.large_category.name,
-                "itemOption"     : [option.size for option in recommend_product.option_set.all()],
-                "materials"      : [material.name for material in recommend_product.material_set.all()],
-                'hits'           : recommend_product.hits
-            } for recommend_product in recommend_products]
-
-            return JsonResponse({'detail': detail, 'recommend': recommend}, status=200)
-
-        except Product.DoesNotExist:
-            return JsonResponse({"message": "Product_DoesNotExist"}, status=404)
-
-
-class LikeView(View):
-    # @signin_decorator
-    def post(self, request, product_id):
-        try:
-            like, is_like = Like.objects.get_or_create(product_id=product_id, user_id=request.user.id)
-            
-            if not is_like:
-                like.delete()
-            
-            return JsonResponse({'massage':"ToggleSuccess"}, status=200)
-                
-        except Product.DoesNotExist:
-            return JsonResponse({'massage':"DoesNotExist"}, status=401)
-
-class ProductSearchView(View):
-    def get(self, request):
-        products = Product.objects.all()
+        
+        # 검색 부분
         word_list  = request.GET.get('word', '').split()
-        print(word_list)
+        print('word_list:', word_list)
 
         word_list = [word.replace(".","").replace("-","").replace(" ","").upper() for word in word_list]
         convert_word = {}
@@ -691,81 +562,108 @@ class ProductSearchView(View):
         }
 
 
-
-        for word in word_list:
-            if word.encode().isalpha(): # 입력이 영어인 경우
-                for key in brand_dict:
-                    if word == key.replace(".","").replace("-","").replace(" ",""):
-                        convert_word["brand"] = key
-                        break
-                    else:
-                        if SequenceMatcher(None, key.replace(".","").replace("-","").replace(" ",""), word).ratio() >= 0.6:
+        if word_list:
+            for word in word_list:
+                if word.encode().isalpha(): # 입력이 영어인 경우
+                    for key in brand_dict:
+                        if word == key.replace(".","").replace("-","").replace(" ",""):
                             convert_word["brand"] = key
                             break
+                        else:
+                            if SequenceMatcher(None, key.replace(".","").replace("-","").replace(" ",""), word).ratio() >= 0.6:
+                                convert_word["brand"] = key
+                                break
 
-                for key in small_category_dict:
-                    if word == key.replace(".","").replace("-","").replace(" ",""):
-                        convert_word["small_category"] = key
-                        break
-                    else:
-                        if SequenceMatcher(None, key.replace(".","").replace("-","").replace(" ",""), word).ratio() >= 0.6:
+                    for key in small_category_dict:
+                        if word == key.replace(".","").replace("-","").replace(" ",""):
                             convert_word["small_category"] = key
                             break
+                        else:
+                            if SequenceMatcher(None, key.replace(".","").replace("-","").replace(" ",""), word).ratio() >= 0.6:
+                                convert_word["small_category"] = key
+                                break
 
-                for key in medium_category_dict:
-                    if word == key.replace(".","").replace("-","").replace(" ",""):
-                        convert_word["medium_category"] = key
-                        break
-                    else:
-                        if SequenceMatcher(None, key.replace(".","").replace("-","").replace(" ",""), word).ratio() >= 0.6:
+                    for key in medium_category_dict:
+                        if word == key.replace(".","").replace("-","").replace(" ",""):
                             convert_word["medium_category"] = key
                             break
+                        else:
+                            if SequenceMatcher(None, key.replace(".","").replace("-","").replace(" ",""), word).ratio() >= 0.6:
+                                convert_word["medium_category"] = key
+                                break
 
-                for key in large_category_dict:
-                    if word == key.replace(".","").replace("-","").replace(" ",""):
-                        convert_word["large_category"] = key
-                        break
-                    else:
-                        if SequenceMatcher(None, key.replace(".","").replace("-","").replace(" ",""), word).ratio() >= 0.6:
+                    for key in large_category_dict:
+                        if word == key.replace(".","").replace("-","").replace(" ",""):
                             convert_word["large_category"] = key
                             break
-            else: # 입력이 한글인 경우
-                for key in brand_dict:
-                    if word in brand_dict[key]:
-                        convert_word["brand"] = key
-                        break
-                    else:
-                        if SequenceMatcher(None, brand_dict[key][0].replace(" ",""), word).ratio() >= 0.6:
+                        else:
+                            if SequenceMatcher(None, key.replace(".","").replace("-","").replace(" ",""), word).ratio() >= 0.6:
+                                convert_word["large_category"] = key
+                                break
+                else: # 입력이 한글인 경우
+                    for key in brand_dict:
+                        if word in brand_dict[key]:
                             convert_word["brand"] = key
                             break
+                        else:
+                            if SequenceMatcher(None, brand_dict[key][0].replace(" ",""), word).ratio() >= 0.6:
+                                convert_word["brand"] = key
+                                break
 
-                for key in small_category_dict:
-                    if word in small_category_dict[key]:
-                        convert_word["small_category"] = key
-                        break
-                    else:
-                        if SequenceMatcher(None, small_category_dict[key][0].replace(" ",""), word).ratio() >= 0.6:
+                    for key in small_category_dict:
+                        if word in small_category_dict[key]:
                             convert_word["small_category"] = key
                             break
-                
-                for key in medium_category_dict:
-                    if word in medium_category_dict[key]:
-                        convert_word["medium_category"] = key
-                        break
-                    else:
-                        if SequenceMatcher(None, medium_category_dict[key][0].replace(" ",""), word).ratio() >= 0.6:
+                        else:
+                            if SequenceMatcher(None, small_category_dict[key][0].replace(" ",""), word).ratio() >= 0.6:
+                                convert_word["small_category"] = key
+                                break
+                    
+                    for key in medium_category_dict:
+                        if word in medium_category_dict[key]:
                             convert_word["medium_category"] = key
                             break
+                        else:
+                            if SequenceMatcher(None, medium_category_dict[key][0].replace(" ",""), word).ratio() >= 0.6:
+                                convert_word["medium_category"] = key
+                                break
 
-                for key in large_category_dict:
-                    if word in large_category_dict[key]:
-                        convert_word["large_category"] = key
-                        break
-                    else:
-                        if SequenceMatcher(None, large_category_dict[key][0].replace(" ",""), word).ratio() >= 0.6:
+                    for key in large_category_dict:
+                        if word in large_category_dict[key]:
                             convert_word["large_category"] = key
                             break
-        print(convert_word)
+                        else:
+                            if SequenceMatcher(None, large_category_dict[key][0].replace(" ",""), word).ratio() >= 0.6:
+                                convert_word["large_category"] = key
+                                break
+        print('convert_word:',convert_word)
+
+        if large_category:
+            products = products.filter(small_category__medium_category__large_category__name__in=large_category)
+
+        if medium_category:
+            products = products.filter(small_category__medium_category__name__iexact=medium_category)
+
+        if small_category:
+            products = products.filter(small_category__name__in=small_category)
+
+        if sale:
+            products = products.exclude(sale_price=None)
+
+        if brand:
+            products = products.filter(brand__in=brand)
+
+        if min_price or max_price:
+            products = products.filter(price__range=(min_price, max_price))
+
+        if order_condition == '높은 가격순':
+            products = products.order_by('-price')
+
+        if order_condition == '낮은 가격순':
+            products = products.order_by('price')   
+
+        if order_condition == '추천 상품':
+            products = products.order_by('-hits')         
 
         if convert_word:
             if convert_word.get('brand'):
@@ -780,8 +678,19 @@ class ProductSearchView(View):
             if convert_word.get('large_category'):
                 products = products.filter(small_category__medium_category__large_category__name__icontains=convert_word['large_category'])
 
+
+        # 가격바에 디폴트 값으로 쓰임(화면에 표시되는 상품 중에서의 가장 높은 가격, 가장 낮은 가격)
+        if products:
+            price_bar = {
+                "min" : products.order_by('price')[0].price,
+                "max" : products.order_by('-price')[0].price
+            }
         else:
-            products = products.filter(brand__icontains=word)
+            price_bar = {}
+
+        # if문에 하나도 안 걸릴 때 전체 상품이 나오는 것을 방지
+        if len(products) == Product.objects.count():
+            products = []
 
         result = [{
             "itemImg"        : [image.url for image in product.image_set.all()],
@@ -794,9 +703,108 @@ class ProductSearchView(View):
             "categorySmall"  : product.small_category.name,
             "categoryMedium" : product.small_category.medium_category.name,
             "gender"         : product.small_category.medium_category.large_category.name,
-            "itemOption"     : [option.size for option in product.option_set.all()],
+            "itemOption"     : [option.size for option in product.option_set.all()],    
             "materials"      : [material.name for material in product.material_set.all()],
-
+            'hits'           : product.hits
         } for product in products]
 
-        return JsonResponse({'message': 'success', 'result': result, 'convert_word': convert_word}, status=200)
+        return JsonResponse({'message': 'success', 'result': result, 'price_bar': price_bar, 'convert_word': convert_word}, status=200)
+
+
+
+
+def get_client_ip(request):
+    x_forwarded_for = request.META.get('HTTP_X_FORWARDED_FOR')
+    if x_forwarded_for:
+        ip = x_forwarded_for.split(',')[0]
+    else:
+        ip = request.META.get('REMOTE_ADDR')
+    return ip
+
+
+class ProductDetailView(View): # 상품상세페이지에 필요한 데이터: 브랜드이름,상품명,가격,할인가격,스큐넘버,소재,옵션(사이즈),상품사진
+    # def get(self, request, product_id):
+    def get(self, request, sku_number):
+        try:
+            product = Product.objects.get(sku_number=sku_number)
+            # product = Product.objects.get(id=product_id)
+            # images = product.image_set.all()
+
+            ip = get_client_ip(request)
+
+            if not ProductHits.objects.filter(client_ip=ip, product_id=product.id).exists():
+                product.hits += 1 
+                product.save()
+                
+                ProductHits.objects.create(
+                    client_ip = ip,
+                    product_id = product.id
+                )
+
+            detail = {
+                "itemImg"        : [image.url for image in product.image_set.all()],
+                "itemBrand"      : product.brand,
+                "itemName"       : product.name,
+                "price"          : product.price,
+                "sale_price"     : product.sale_price,
+                "skuNum"         : product.sku_number,
+                "product_id"     : product.id,
+                "categorySmall"  : product.small_category.name,
+                "categoryMedium" : product.small_category.medium_category.name,
+                "gender"         : product.small_category.medium_category.large_category.name,
+                "itemOption"     : [option.size for option in product.option_set.all()],
+                "materials"      : [material.name for material in product.material_set.all()],
+                'hits'           : product.hits
+            }   
+
+            # 추천 상품(동일 성별이면서 동일 소카테고리인 거)
+            same_small_category = product.small_category.name
+            same_gender = product.small_category.medium_category.large_category.name
+            
+            recommend_products = Product.objects.filter(
+                small_category__name = same_small_category,
+                small_category__medium_category__large_category__name = same_gender
+            ).exclude(id=product.id)
+
+            number_of_samples = 20
+            if len(recommend_products) < number_of_samples:
+                number_of_samples = len(recommend_products)
+            recommend_products = random.sample(list(recommend_products), number_of_samples)
+
+            recommend = [{
+                "itemImg"        : [image.url for image in recommend_product.image_set.all()],
+                "itemBrand"      : recommend_product.brand,
+                "itemName"       : recommend_product.name,
+                "price"          : recommend_product.price,
+                "sale_price"     : recommend_product.sale_price,
+                "skuNum"         : recommend_product.sku_number,
+                "product_id"     : recommend_product.id,
+                "categorySmall"  : recommend_product.small_category.name,
+                "categoryMedium" : recommend_product.small_category.medium_category.name,
+                "gender"         : recommend_product.small_category.medium_category.large_category.name,
+                "itemOption"     : [option.size for option in recommend_product.option_set.all()],
+                "materials"      : [material.name for material in recommend_product.material_set.all()],
+                'hits'           : recommend_product.hits
+            } for recommend_product in recommend_products]
+
+            return JsonResponse({'detail': detail, 'recommend': recommend}, status=200)
+
+        except Product.DoesNotExist:
+            return JsonResponse({"message": "Product_DoesNotExist"}, status=404)
+
+
+class LikeView(View):
+    # @signin_decorator
+    def post(self, request, product_id):
+        try:
+            like, is_like = Like.objects.get_or_create(product_id=product_id, user_id=request.user.id)
+            
+            if not is_like:
+                like.delete()
+            
+            return JsonResponse({'massage':"ToggleSuccess"}, status=200)
+                
+        except Product.DoesNotExist:
+            return JsonResponse({'massage':"DoesNotExist"}, status=401)
+
+        
